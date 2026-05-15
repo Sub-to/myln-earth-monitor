@@ -280,28 +280,44 @@ function arcCoords(topo, idx) {
 }
 
 let _topoCache = null;
+// 日付変更線（180°）またぎ検出付きパス描画
+function buildPath(topo, arcGroups) {
+  ctx.beginPath();
+  for (const arcGroup of arcGroups) {
+    let prevX = null;
+    for (const arcIdx of arcGroup) {
+      const coords = arcCoords(topo, arcIdx);
+      for (const [lon, lat] of coords) {
+        if (lat < -89 || lat > 89) continue; // 極付近スキップ
+        const [x, y] = mercator(lat, lon);
+        if (prevX === null) {
+          ctx.moveTo(x, y);
+        } else if (Math.abs(x - prevX) > W * 0.5) {
+          // 画面の半分以上ジャンプ = 日付変更線またぎ → 線を引かない
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+        prevX = x;
+      }
+    }
+  }
+}
+
 function drawWorld(topo) {
   if (!topo) return;
-  // 国境線は極めて薄く — 塗りつぶしメインでスッキリ
   ctx.fillStyle   = '#071828';
-  ctx.strokeStyle = 'rgba(0,160,220,0.12)';
-  ctx.lineWidth   = 0.4;
-  const geoms = topo.objects.countries.geometries;
+  ctx.strokeStyle = 'rgba(0,180,255,0.08)';
+  ctx.lineWidth   = 0.3;
+
+  // land オブジェクトがあれば使う（国境なしでスッキリ）
+  const src = topo.objects.land || topo.objects.countries;
+  const geoms = src.geometries;
+
   for (const geom of geoms) {
     const rings = geom.type === 'Polygon' ? [geom.arcs] : geom.arcs;
     for (const poly of rings) {
-      ctx.beginPath();
-      for (const arcGroup of poly) {
-        let first = true;
-        for (const arcIdx of arcGroup) {
-          const coords = arcCoords(topo, arcIdx);
-          for (const [lon, lat] of coords) {
-            const [x, y] = mercator(lat, lon);
-            if (first) { ctx.moveTo(x,y); first=false; }
-            else        { ctx.lineTo(x,y); }
-          }
-        }
-      }
+      buildPath(topo, poly);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
@@ -426,9 +442,15 @@ function draw() {
 }
 
 // TopoJSON を保持して再描画
-fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
+// land-110m.json = 国境なし・陸地だけ・アンチメリジアン問題が少ない
+fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/land-110m.json')
   .then(r=>r.json()).then(topo => { _topoData=topo; resize(); })
-  .catch(()=>resize());
+  .catch(() => {
+    // フォールバック: countries版
+    fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
+      .then(r=>r.json()).then(topo => { _topoData=topo; resize(); })
+      .catch(()=>resize());
+  });
 
 // ────────────────────────────────────────────────
 //  地震パネル更新
