@@ -43,8 +43,56 @@ def myln_classify(intensity_norm, magnitude_norm, depth_inv, tsunami, freq_norm)
 _quake_cache = []
 _quake_lock  = threading.Lock()
 
-def fetch_quakes():
-    """P2P地震情報 から震度4以上を取得"""
+def fetch_usgs() -> list:
+    """USGS から全世界 M4.5以上（過去24時間）を取得"""
+    url = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "MYLN-EarthMonitor/1.0"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = json.loads(r.read())
+        results = []
+        for f in data.get("features", []):
+            prop = f.get("properties", {})
+            geo  = f.get("geometry",   {})
+            coords = geo.get("coordinates", [0, 0, 0])
+            lon, lat, dep = coords[0], coords[1], coords[2] or 10
+            mag  = prop.get("mag") or 0
+            name = prop.get("place") or "Unknown"
+            t    = prop.get("time",  0)
+            tsunami = float(prop.get("tsunami", 0))
+            # 時刻変換
+            from datetime import datetime
+            time_str = datetime.utcfromtimestamp(t/1000).strftime("%Y-%m-%d %H:%M") if t else ""
+
+            # MYLN 分類（震度は推定: M4.5≈震度3, M5.5≈震度4, M6.5≈震度5強）
+            int_est  = max(0.0, min(1.0, (mag - 3.0) / 6.0))  # 粗い震度推定
+            mag_norm = mag / 9.0
+            dep_inv  = max(0.0, 1.0 - abs(dep) / 700.0)
+            label, conf = myln_classify(int_est, mag_norm, dep_inv, min(tsunami,1.0), 0.0)
+
+            results.append({
+                "name":      name,
+                "lat":       round(lat, 3),
+                "lon":       round(lon, 3),
+                "magnitude": round(mag, 1),
+                "depth":     round(abs(dep), 0),
+                "scale":     round(mag, 1),   # 世界版は M をそのまま表示
+                "tsunami":   "あり" if tsunami else "None",
+                "time":      time_str,
+                "myln":      label,
+                "conf":      round(conf, 3),
+                "alert":     mag >= 5.5,       # M5.5以上でアラート点滅
+                "source":    "USGS",
+            })
+        # 大きい順にソート
+        results.sort(key=lambda x: x["magnitude"], reverse=True)
+        return results[:30]
+    except Exception as e:
+        print(f"USGS API エラー: {e}")
+        return []
+
+def fetch_japan() -> list:
+    """P2P地震情報 から日本の震度4以上を取得"""
     url = "https://api.p2pquake.net/v2/jma/quake?limit=30"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "MYLN-EarthMonitor/1.0"})
@@ -54,41 +102,48 @@ def fetch_quakes():
         for q in data:
             pts = q.get("points", [])
             max_scale = max((p.get("scale", 0) for p in pts), default=0)
-            if max_scale < 40:  # 震度4未満はスキップ
-                continue
+            if max_scale < 40: continue
             hypo = q.get("earthquake", {}).get("hypocenter", {})
             mag  = q.get("earthquake", {}).get("magnitude", 0) or 0
             dep  = abs(hypo.get("depth", 100)) if hypo.get("depth") else 100
             lat  = hypo.get("latitude",  0) or 0
             lon  = hypo.get("longitude", 0) or 0
-            name = hypo.get("name", "不明")
-            time_str = q.get("earthquake", {}).get("time", "")
-            tsunami_str = q.get("earthquake", {}).get("domesticTsunami", "None")
-            tsunami = 1.0 if tsunami_str not in ("None", "Unknown", "") else 0.0
-
-            # 正規化
-            int_norm = (max_scale / 10) / 7.0  # scaleは10倍値
-            mag_norm = mag / 9.0
-            dep_inv  = max(0.0, 1.0 - dep / 700.0)
+            name = hypo.get("name", "不明") + "（日本）"
+            time_str  = q.get("earthquake", {}).get("time", "")
+            tsunami_s = q.get("earthquake", {}).get("domesticTsunami", "None")
+            tsunami   = 1.0 if tsunami_s not in ("None","Unknown","") else 0.0
+            int_norm  = (max_scale / 10) / 7.0
+            mag_norm  = mag / 9.0
+            dep_inv   = max(0.0, 1.0 - dep / 700.0)
             label, conf = myln_classify(int_norm, mag_norm, dep_inv, tsunami, 0.0)
-
             results.append({
                 "name":      name,
-                "lat":       lat,
-                "lon":       lon,
-                "magnitude": mag,
-                "depth":     dep,
-                "scale":     max_scale / 10,  # 震度(float)
-                "tsunami":   tsunami_str,
+                "lat":       lat, "lon": lon,
+                "magnitude": mag, "depth": dep,
+                "scale":     max_scale / 10,
+                "tsunami":   tsunami_s,
                 "time":      time_str,
-                "myln":      label,
-                "conf":      round(conf, 3),
-                "alert":     max_scale >= 40,  # 震度4以上
+                "myln":      label, "conf": round(conf, 3),
+                "alert":     max_scale >= 40,
+                "source":    "JMA",
             })
         return results[:10]
     except Exception as e:
-        print(f"地震API エラー: {e}")
+        print(f"JMA API エラー: {e}")
         return []
+
+def fetch_quakes():
+    """USGS（全世界）+ JMA（日本）を合体"""
+    usgs  = fetch_usgs()
+    japan = fetch_japan()
+    # JMA データが USGS と重複する場合は JMA を優先（より詳細）
+    jma_locs = {(round(q["lat"],1), round(q["lon"],1)) for q in japan}
+    usgs_filtered = [q for q in usgs
+                     if (round(q["lat"],1), round(q["lon"],1)) not in jma_locs]
+    merged = japan + usgs_filtered
+    merged.sort(key=lambda x: x["magnitude"], reverse=True)
+    print(f"  地震: JMA={len(japan)} USGS={len(usgs_filtered)} 合計={len(merged)}")
+    return merged[:40]
 
 # ── 衛星データキャッシュ ──────────────────────────────────────
 _sat_cache  = []

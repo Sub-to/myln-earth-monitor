@@ -193,7 +193,7 @@
 
     <!-- 地震アラート -->
     <div class="panel-block" style="flex:1; display:flex; flex-direction:column;">
-      <div class="panel-title">🚨 EARTHQUAKE ALERT  ≥ 震度4</div>
+      <div class="panel-title">🚨 EARTHQUAKE  🌍USGS M4.5+ / 🇯🇵JMA 震度4+</div>
       <div id="quake-list"><div style="color:var(--dim);font-size:0.8em;padding:8px;">データ取得中...</div></div>
     </div>
 
@@ -209,7 +209,7 @@
 <!-- フッター -->
 <div id="footer">
   <span id="status-text">MYLN EARTH MONITOR // 初期化中...</span>
-  <span>Data: P2P地震情報 / CelesTrak / Open-Notify</span>
+  <span>Data: USGS🌍 / JMA🇯🇵 / CelesTrak / Open-Notify</span>
 </div>
 
 <script>
@@ -420,7 +420,10 @@ function drawQuakes() {
     // ラベル
     ctx.fillStyle = '#aaccdd';
     ctx.font      = '9px Courier New';
-    ctx.fillText(`M${q.magnitude} 震度${q.scale}`, x+8, y+3);
+    const lbl = q.source === 'JMA'
+      ? `M${q.magnitude} 震度${q.scale}`
+      : `M${q.magnitude}`;
+    ctx.fillText(lbl, x+8, y+3);
   }
 }
 
@@ -463,16 +466,22 @@ function updateQuakePanel(data) {
   quakes = data;
   const el = document.getElementById('quake-list');
   if (!data.length) {
-    el.innerHTML = '<div style="color:var(--dim);font-size:0.8em;padding:8px;">震度4以上の地震なし</div>';
+    el.innerHTML = '<div style="color:var(--dim);font-size:0.8em;padding:8px;">M4.5以上の地震なし</div>';
     return;
   }
   el.innerHTML = data.map(q => {
     const cls = q.myln==='CRITICAL'?'alert-critical': q.myln==='HIGH'?'alert-high':'';
     const dot = q.alert ? '<span class="blink-dot"></span>' : '';
+    const srcBadge = q.source === 'JMA'
+      ? '<span style="font-size:0.7em;padding:1px 4px;border:1px solid #ff7700;color:#ff7700;border-radius:2px;margin-left:4px;">JMA🇯🇵</span>'
+      : '<span style="font-size:0.7em;padding:1px 4px;border:1px solid #4488ff;color:#4488ff;border-radius:2px;margin-left:4px;">USGS🌍</span>';
+    const scaleLabel = q.source === 'JMA'
+      ? `<span class="quake-scale" style="color:${scaleColor(q.myln)}">震度${q.scale}</span>`
+      : `<span class="quake-scale" style="color:${scaleColor(q.myln)}">M${q.magnitude}</span>`;
     return `<div class="quake-item ${cls}">
-      <div class="quake-name">${dot}${q.name}</div>
+      <div class="quake-name">${dot}${q.name}${srcBadge}</div>
       <div class="quake-meta">
-        <span class="quake-scale" style="color:${scaleColor(q.myln)}">震度${q.scale}</span>
+        ${scaleLabel}
         M${q.magnitude} / 深さ${q.depth}km
       </div>
       <div style="margin-top:4px; display:flex; justify-content:space-between; align-items:center;">
