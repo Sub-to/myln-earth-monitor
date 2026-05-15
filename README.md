@@ -1,6 +1,6 @@
 # 🌍 MYLN EARTH MONITOR
 
-> Real-time satellite tracking + earthquake alerts — powered by MYLN-FRAME.  
+> Real-time satellite tracking + worldwide earthquake alerts — powered by MYLN-FRAME.  
 > No subscriptions. No API keys. Just data, speed, and a little bit of space-center romance.
 
 ![screenshot](https://img.shields.io/badge/status-live-00ff88?style=flat&logo=satellite&logoColor=white)
@@ -21,8 +21,8 @@
 │        🔴 Earthquake epicenters blinking             │
 │                                                      │
 ├────────────────────────┬─────────────────────────────┤
-│  🛸 SATELLITE TRACK    │  🚨 EARTHQUAKE ALERT ≥ 震度4 │
-│  ISS  408km            │  ⚠️  M5.2 岩手沖  HIGH 83%  │
+│  🛸 SATELLITE TRACK    │  🚨 EARTHQUAKE ALERT M4.5+   │
+│  ISS  408km            │  ⚠️  M5.2 Morocco  HIGH 83%  │
 │  ...                   │     [blinking red dot]       │
 └────────────────────────┴─────────────────────────────┘
 ```
@@ -35,7 +35,7 @@ Dark terminal aesthetic. Green glow. Blinking alerts. The way Earth monitoring s
 
 - **🌍 Mercator world map** — TopoJSON countries, latitude/longitude grid
 - **🛸 Live satellite positions** — ISS + visual satellites via CelesTrak / sgp4
-- **🚨 Earthquake alerts** — Japan JMA data, 震度4 (seismic intensity 4) and above only
+- **🚨 Earthquake alerts** — Worldwide M4.5+ via USGS + Japan JMA 震度4+ dual source
 - **⚡ MYLN-FRAME AI** — `EarthquakeHead` classifies each quake: SAFE / LOW / MEDIUM / HIGH / CRITICAL
 - **🕐 Real-time clock** — UTC+local, always ticking
 - **🔄 Auto-refresh** — every 30 seconds, no page reload
