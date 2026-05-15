@@ -82,7 +82,8 @@ Earthquake event
 | 🌍 World map | [world-atlas](https://github.com/topojson/world-atlas) CDN | ✗ |
 | 🛸 Satellite TLE | [CelesTrak](https://celestrak.org) | ✗ |
 | 🛸 ISS position | [Open Notify](http://api.open-notify.org) | ✗ |
-| 🚨 Earthquakes | [P2P地震情報](https://www.p2pquake.net/develop/json_api_v2/) | ✗ |
+| 🚨 Earthquakes (Global) | [USGS Earthquake Hazards](https://earthquake.usgs.gov) M4.5+ past 24h | ✗ |
+| 🚨 Earthquakes (Japan) | [P2P地震情報](https://www.p2pquake.net/develop/json_api_v2/) 震度4+ | ✗ |
 
 100% free. 100% open. Runs entirely on your own hardware.
 
