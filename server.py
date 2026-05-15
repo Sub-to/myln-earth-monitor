@@ -402,7 +402,7 @@ def api_chat():
     body = request.json
     user_msg = body.get("message", "")
 
-    LM_BASE  = "http://192.168.1.122:1234/v1"
+    LM_BASE  = "http://localhost:1234/v1"
     LM_TOKEN = "sk-lm-XaYHWLfi:qKCEy31iJASbyl8oBsh3"
     LM_MODEL = "llm-jp-4-8b-instruct-mlx"
 
