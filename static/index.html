@@ -282,9 +282,10 @@ function arcCoords(topo, idx) {
 let _topoCache = null;
 function drawWorld(topo) {
   if (!topo) return;
-  ctx.strokeStyle = '#0a3a5a';
-  ctx.lineWidth   = 0.5;
-  ctx.fillStyle   = '#030e18';
+  // 国境線は極めて薄く — 塗りつぶしメインでスッキリ
+  ctx.fillStyle   = '#071828';
+  ctx.strokeStyle = 'rgba(0,160,220,0.12)';
+  ctx.lineWidth   = 0.4;
   const geoms = topo.objects.countries.geometries;
   for (const geom of geoms) {
     const rings = geom.type === 'Polygon' ? [geom.arcs] : geom.arcs;
@@ -302,33 +303,49 @@ function drawWorld(topo) {
         }
       }
       ctx.closePath();
-      ctx.fill(); ctx.stroke();
+      ctx.fill();
+      ctx.stroke();
     }
   }
 }
 
-// グリッド線
+// グリッド線 — 赤道・北回帰線・南回帰線のみ、極めて薄く
 function drawGrid() {
-  ctx.strokeStyle = 'rgba(10,50,80,0.4)';
-  ctx.lineWidth   = 0.5;
-  // 緯線
-  for (let lat=-60; lat<=80; lat+=30) {
+  ctx.font = '9px Courier New';
+
+  // 主要緯線のみ（赤道・±23.5°・±60°）
+  const latLines = [
+    { lat:  60, label: '60°N', alpha: 0.15 },
+    { lat:  23.5, label: 'tropic', alpha: 0.10 },
+    { lat:   0, label: 'EQ',    alpha: 0.25 },  // 赤道だけ少し目立つ
+    { lat: -23.5, label: 'tropic', alpha: 0.10 },
+    { lat: -60, label: '60°S', alpha: 0.15 },
+  ];
+  for (const {lat, label, alpha} of latLines) {
+    const [, y] = mercator(lat, 0);
+    ctx.strokeStyle = lat === 0
+      ? `rgba(0,180,255,${alpha})`
+      : `rgba(0,120,180,${alpha})`;
+    ctx.lineWidth = lat === 0 ? 0.8 : 0.4;
+    ctx.setLineDash(lat === 0 ? [] : [4, 6]);
     ctx.beginPath();
-    const [,y] = mercator(lat, -180);
-    ctx.moveTo(0,y); ctx.lineTo(W,y);
+    ctx.moveTo(0, y); ctx.lineTo(W, y);
     ctx.stroke();
-    ctx.fillStyle='rgba(100,150,180,0.3)';
-    ctx.font='9px Courier New';
-    ctx.fillText(`${lat}°`, 3, y-2);
+    ctx.setLineDash([]);
+    ctx.fillStyle = `rgba(0,150,200,${alpha * 1.5})`;
+    ctx.fillText(label, 4, y - 3);
   }
-  // 経線
-  for (let lon=-150; lon<=180; lon+=30) {
-    ctx.beginPath();
+
+  // 経線は180°（日付変更線）と本初子午線のみ
+  for (const lon of [0, 180, -180]) {
     const [x] = mercator(0, lon);
-    ctx.moveTo(x,0); ctx.lineTo(x,H);
+    ctx.strokeStyle = 'rgba(0,120,180,0.12)';
+    ctx.lineWidth   = 0.4;
+    ctx.setLineDash([4, 8]);
+    ctx.beginPath();
+    ctx.moveTo(x, 0); ctx.lineTo(x, H);
     ctx.stroke();
-    ctx.fillStyle='rgba(100,150,180,0.3)';
-    ctx.fillText(`${lon}°`, x+2, 10);
+    ctx.setLineDash([]);
   }
 }
 
@@ -394,15 +411,16 @@ function drawQuakes() {
 let _topoData = null;
 function draw() {
   ctx.clearRect(0, 0, W, H);
-  // 背景グラデーション
+  // 海: 深い青
   const grad = ctx.createLinearGradient(0,0,0,H);
-  grad.addColorStop(0, '#020810');
-  grad.addColorStop(1, '#030c18');
+  grad.addColorStop(0,   '#020a14');
+  grad.addColorStop(0.5, '#031220');
+  grad.addColorStop(1,   '#020a14');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
 
-  drawGrid();
-  if (_topoData) drawWorld(_topoData);
+  if (_topoData) drawWorld(_topoData);  // 陸地を先に
+  drawGrid();                           // グリッドを上に薄く乗せる
   drawSats();
   drawQuakes();
 }
