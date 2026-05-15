@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>MYLN EARTH MONITOR</title>
+<style>
+  :root {
+    --bg:      #030810;
+    --panel:   #050f1a;
+    --border:  #0a3050;
+    --green:   #00ff88;
+    --cyan:    #00cfff;
+    --red:     #ff2244;
+    --yellow:  #ffcc00;
+    --orange:  #ff7700;
+    --dim:     #2a4a6a;
+    --text:    #7ab8d8;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Courier New', monospace;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── ヘッダー ── */
+  #header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    flex-shrink: 0;
+  }
+  #title { color: var(--cyan); font-size: 1.1em; letter-spacing: 4px; }
+  #clock {
+    font-size: 1.6em;
+    color: var(--green);
+    letter-spacing: 3px;
+    font-weight: bold;
+    text-shadow: 0 0 12px var(--green);
+  }
+  #myln-badge {
+    font-size: 0.75em;
+    padding: 3px 10px;
+    border: 1px solid var(--cyan);
+    border-radius: 3px;
+    color: var(--cyan);
+    letter-spacing: 2px;
+  }
+
+  /* ── メインレイアウト ── */
+  #main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── 地図エリア ── */
+  #map-wrap {
+    flex: 1;
+    position: relative;
+    background: var(--bg);
+    border-right: 1px solid var(--border);
+  }
+  #map-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* ── 右パネル ── */
+  #right-panel {
+    width: 300px;
+    display: flex;
+    flex-direction: column;
+    background: var(--panel);
+    flex-shrink: 0;
+  }
+
+  .panel-block {
+    border-bottom: 1px solid var(--border);
+    padding: 10px;
+  }
+  .panel-title {
+    font-size: 0.7em;
+    letter-spacing: 3px;
+    color: var(--dim);
+    margin-bottom: 8px;
+  }
+
+  /* ── 地震アラート ── */
+  #quake-list { overflow-y: auto; flex: 1; }
+  .quake-item {
+    padding: 8px;
+    margin-bottom: 6px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-size: 0.78em;
+    position: relative;
+    transition: all 0.3s;
+  }
+  .quake-item.alert-high { border-color: var(--orange); background: rgba(255,119,0,0.08); }
+  .quake-item.alert-critical { border-color: var(--red); background: rgba(255,34,68,0.1); }
+  .quake-name { color: var(--cyan); font-weight: bold; margin-bottom:3px; }
+  .quake-meta { color: var(--text); font-size:0.9em; }
+  .quake-scale { font-size:1.2em; font-weight:bold; margin-right:6px; }
+
+  /* 点滅マーカー */
+  .blink-dot {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--red);
+    margin-right: 6px;
+    animation: blink 0.8s infinite;
+    box-shadow: 0 0 8px var(--red);
+    vertical-align: middle;
+  }
+  @keyframes blink {
+    0%,100% { opacity:1; transform:scale(1); }
+    50%      { opacity:0.1; transform:scale(0.5); }
+  }
+  .myln-label {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 2px;
+    font-size: 0.8em;
+    font-weight: bold;
+    letter-spacing: 1px;
+  }
+  .myln-SAFE     { background:#0a2a1a; color:#00ff88; border:1px solid #00ff88; }
+  .myln-LOW      { background:#1a1a00; color:#ffff00; border:1px solid #ffff00; }
+  .myln-MEDIUM   { background:#1a0f00; color:#ffaa00; border:1px solid #ffaa00; }
+  .myln-HIGH     { background:#1a0500; color:#ff7700; border:1px solid #ff7700; }
+  .myln-CRITICAL { background:#1a0008; color:#ff2244; border:1px solid #ff2244; }
+
+  /* ── 衛星リスト ── */
+  #sat-list { max-height: 180px; overflow-y: auto; }
+  .sat-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    font-size: 0.72em;
+    border-bottom: 1px solid rgba(10,48,80,0.4);
+    color: var(--text);
+  }
+  .sat-name { color: var(--cyan); }
+  .sat-pos  { color: var(--dim); }
+
+  /* ── フッター ── */
+  #footer {
+    padding: 5px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+    font-size: 0.65em;
+    color: var(--dim);
+    display: flex;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  /* スクロールバー */
+  ::-webkit-scrollbar { width:4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); }
+</style>
+</head>
+<body>
+
+<!-- ヘッダー -->
+<div id="header">
+  <div id="title">⚡ MYLN EARTH MONITOR</div>
+  <div id="clock">--:--:--</div>
+  <div id="myln-badge">MYLN-FRAME v1.0</div>
+</div>
+
+<!-- メイン -->
+<div id="main">
+
+  <!-- 地図 -->
+  <div id="map-wrap">
+    <canvas id="map-canvas"></canvas>
+  </div>
+
+  <!-- 右パネル -->
+  <div id="right-panel">
+
+    <!-- 地震アラート -->
+    <div class="panel-block" style="flex:1; display:flex; flex-direction:column;">
+      <div class="panel-title">🚨 EARTHQUAKE ALERT  ≥ 震度4</div>
+      <div id="quake-list"><div style="color:var(--dim);font-size:0.8em;padding:8px;">データ取得中...</div></div>
+    </div>
+
+    <!-- 衛星リスト -->
+    <div class="panel-block">
+      <div class="panel-title">🛸 SATELLITE TRACK</div>
+      <div id="sat-list"><div style="color:var(--dim);font-size:0.8em;">取得中...</div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- フッター -->
+<div id="footer">
+  <span id="status-text">MYLN EARTH MONITOR // 初期化中...</span>
+  <span>Data: P2P地震情報 / CelesTrak / Open-Notify</span>
+</div>
+
+<script>
+// ────────────────────────────────────────────────
+//  時計
+// ────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  document.getElementById('clock').textContent =
+    `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}  ` +
+    `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ────────────────────────────────────────────────
+//  Canvas 世界地図（メルカトル図法）
+// ────────────────────────────────────────────────
+const canvas = document.getElementById('map-canvas');
+const ctx    = canvas.getContext('2d');
+let   W = 0, H = 0;
+let   worldGeo = null;
+let   quakes   = [];
+let   sats     = [];
+
+function resize() {
+  const wrap = document.getElementById('map-wrap');
+  W = canvas.width  = wrap.clientWidth;
+  H = canvas.height = wrap.clientHeight;
+  draw();
+}
+window.addEventListener('resize', resize);
+
+// メルカトル変換
+function mercator(lat, lon) {
+  const x = (lon + 180) / 360 * W;
+  const latR = lat * Math.PI / 180;
+  const y = (1 - Math.log(Math.tan(latR/2 + Math.PI/4)) / Math.PI) / 2 * H;
+  return [x, y];
+}
+
+// 世界地図 GeoJSON 読み込み
+fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
+  .then(r => r.json())
+  .then(topo => {
+    // TopoJSON → GeoJSON features
+    const obj = topo.objects.countries;
+    worldGeo  = topoFeatures(topo, obj);
+    resize();
+  }).catch(() => { resize(); });
+
+// シンプルな TopoJSON デコーダー
+function topoFeatures(topo, obj) {
+  const scale = topo.transform ? topo.transform.scale : [1,1];
+  const trans = topo.transform ? topo.transform.translate : [0,0];
+  return (obj.geometries || []).map(geom => {
+    return { type: geom.type, arcs: geom.arcs };
+  });
+}
+
+// arc 座標を取得
+function arcCoords(topo, idx) {
+  const arc = idx < 0 ? [...topo.arcs[~idx]].reverse() : topo.arcs[idx];
+  const sc = topo.transform ? topo.transform.scale : [1,1];
+  const tr = topo.transform ? topo.transform.translate : [0,0];
+  let cx=0, cy=0;
+  return arc.map(([dx,dy]) => { cx+=dx; cy+=dy; return [cx*sc[0]+tr[0], cy*sc[1]+tr[1]]; });
+}
+
+let _topoCache = null;
+function drawWorld(topo) {
+  if (!topo) return;
+  ctx.strokeStyle = '#0a3a5a';
+  ctx.lineWidth   = 0.5;
+  ctx.fillStyle   = '#030e18';
+  const geoms = topo.objects.countries.geometries;
+  for (const geom of geoms) {
+    const rings = geom.type === 'Polygon' ? [geom.arcs] : geom.arcs;
+    for (const poly of rings) {
+      ctx.beginPath();
+      for (const arcGroup of poly) {
+        let first = true;
+        for (const arcIdx of arcGroup) {
+          const coords = arcCoords(topo, arcIdx);
+          for (const [lon, lat] of coords) {
+            const [x, y] = mercator(lat, lon);
+            if (first) { ctx.moveTo(x,y); first=false; }
+            else        { ctx.lineTo(x,y); }
+          }
+        }
+      }
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
+    }
+  }
+}
+
+// グリッド線
+function drawGrid() {
+  ctx.strokeStyle = 'rgba(10,50,80,0.4)';
+  ctx.lineWidth   = 0.5;
+  // 緯線
+  for (let lat=-60; lat<=80; lat+=30) {
+    ctx.beginPath();
+    const [,y] = mercator(lat, -180);
+    ctx.moveTo(0,y); ctx.lineTo(W,y);
+    ctx.stroke();
+    ctx.fillStyle='rgba(100,150,180,0.3)';
+    ctx.font='9px Courier New';
+    ctx.fillText(`${lat}°`, 3, y-2);
+  }
+  // 経線
+  for (let lon=-150; lon<=180; lon+=30) {
+    ctx.beginPath();
+    const [x] = mercator(0, lon);
+    ctx.moveTo(x,0); ctx.lineTo(x,H);
+    ctx.stroke();
+    ctx.fillStyle='rgba(100,150,180,0.3)';
+    ctx.fillText(`${lon}°`, x+2, 10);
+  }
+}
+
+// 衛星を描画
+function drawSats() {
+  for (const s of sats) {
+    if (s.lat < -85 || s.lat > 85) continue;
+    const [x, y] = mercator(s.lat, s.lon);
+    ctx.beginPath();
+    ctx.arc(x, y, 3, 0, Math.PI*2);
+    ctx.fillStyle = s.name === 'ISS' ? '#00ffcc' : '#00aaff';
+    ctx.shadowBlur  = 6;
+    ctx.shadowColor = s.name === 'ISS' ? '#00ffcc' : '#00aaff';
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    if (s.name === 'ISS') {
+      ctx.fillStyle = '#00ffcc';
+      ctx.font = '9px Courier New';
+      ctx.fillText('ISS', x+5, y+3);
+    }
+  }
+}
+
+// 地震を描画（震度4以上は点滅）
+let _blinkState = true;
+setInterval(() => { _blinkState = !_blinkState; draw(); }, 600);
+
+function drawQuakes() {
+  for (const q of quakes) {
+    if (!q.lat || !q.lon) continue;
+    const [x, y] = mercator(q.lat, q.lon);
+    const r = 6 + q.scale * 2;
+
+    // 外輪
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI*2);
+    const alpha = (q.myln === 'CRITICAL') ? 0.6 :
+                  (q.myln === 'HIGH')     ? 0.4 : 0.25;
+    ctx.strokeStyle = q.myln === 'CRITICAL' ? `rgba(255,34,68,${_blinkState ? alpha : alpha*0.2})` :
+                      q.myln === 'HIGH'     ? `rgba(255,119,0,${_blinkState ? alpha : alpha*0.2})` :
+                                              `rgba(255,200,0,0.3)`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // 中心点
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI*2);
+    ctx.fillStyle = _blinkState || q.myln==='MEDIUM' ?
+      (q.myln==='CRITICAL'?'#ff2244': q.myln==='HIGH'?'#ff7700':'#ffcc00') :
+      'rgba(0,0,0,0)';
+    ctx.shadowBlur  = _blinkState ? 12 : 0;
+    ctx.shadowColor = '#ff2244';
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // ラベル
+    ctx.fillStyle = '#aaccdd';
+    ctx.font      = '9px Courier New';
+    ctx.fillText(`M${q.magnitude} 震度${q.scale}`, x+8, y+3);
+  }
+}
+
+let _topoData = null;
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  // 背景グラデーション
+  const grad = ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0, '#020810');
+  grad.addColorStop(1, '#030c18');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  drawGrid();
+  if (_topoData) drawWorld(_topoData);
+  drawSats();
+  drawQuakes();
+}
+
+// TopoJSON を保持して再描画
+fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
+  .then(r=>r.json()).then(topo => { _topoData=topo; resize(); })
+  .catch(()=>resize());
+
+// ────────────────────────────────────────────────
+//  地震パネル更新
+// ────────────────────────────────────────────────
+function scaleColor(myln) {
+  return {SAFE:'#00ff88',LOW:'#ffff00',MEDIUM:'#ffaa00',HIGH:'#ff7700',CRITICAL:'#ff2244'}[myln]||'#aaa';
+}
+
+function updateQuakePanel(data) {
+  quakes = data;
+  const el = document.getElementById('quake-list');
+  if (!data.length) {
+    el.innerHTML = '<div style="color:var(--dim);font-size:0.8em;padding:8px;">震度4以上の地震なし</div>';
+    return;
+  }
+  el.innerHTML = data.map(q => {
+    const cls = q.myln==='CRITICAL'?'alert-critical': q.myln==='HIGH'?'alert-high':'';
+    const dot = q.alert ? '<span class="blink-dot"></span>' : '';
+    return `<div class="quake-item ${cls}">
+      <div class="quake-name">${dot}${q.name}</div>
+      <div class="quake-meta">
+        <span class="quake-scale" style="color:${scaleColor(q.myln)}">震度${q.scale}</span>
+        M${q.magnitude} / 深さ${q.depth}km
+      </div>
+      <div style="margin-top:4px; display:flex; justify-content:space-between; align-items:center;">
+        <span class="myln-label myln-${q.myln}">${q.myln} ${(q.conf*100).toFixed(0)}%</span>
+        <span style="font-size:0.8em;color:var(--dim)">${q.time.slice(0,16)||''}</span>
+      </div>
+      ${q.tsunami!=='None'&&q.tsunami?'<div style="color:#ff2244;font-size:0.8em;margin-top:3px;">⚠️ 津波 '+q.tsunami+'</div>':''}
+    </div>`;
+  }).join('');
+}
+
+// ────────────────────────────────────────────────
+//  衛星パネル更新
+// ────────────────────────────────────────────────
+function updateSatPanel(data) {
+  sats = data;
+  const el = document.getElementById('sat-list');
+  if (!data.length) { el.innerHTML='<div style="color:var(--dim);font-size:0.8em;">取得中...</div>'; return; }
+  el.innerHTML = data.slice(0,15).map(s =>
+    `<div class="sat-item">
+      <span class="sat-name">${s.name==='ISS'?'🛸 ':'🔵 '}${s.name.slice(0,18)}</span>
+      <span class="sat-pos">${s.lat.toFixed(1)}° ${s.lon.toFixed(1)}° / ${s.alt}km</span>
+    </div>`
+  ).join('');
+}
+
+// ────────────────────────────────────────────────
+//  ポーリング
+// ────────────────────────────────────────────────
+let alertCount = 0;
+
+async function poll() {
+  try {
+    const [q, s, st] = await Promise.all([
+      fetch('/api/quakes').then(r=>r.json()),
+      fetch('/api/satellites').then(r=>r.json()),
+      fetch('/api/status').then(r=>r.json()),
+    ]);
+    updateQuakePanel(q);
+    updateSatPanel(s);
+    alertCount = q.filter(x=>x.alert).length;
+    document.getElementById('status-text').textContent =
+      `MYLN:${st.myln?'ON':'OFF'} | 地震:${st.quakes}件(震度4+:${alertCount}) | 衛星:${st.sats}機 | 更新:${new Date().toLocaleTimeString('ja-JP')}`;
+    draw();
+  } catch(e) {
+    document.getElementById('status-text').textContent = `エラー: ${e.message}`;
+  }
+}
+
+poll();
+setInterval(poll, 30000);  // 30秒ごと更新
+</script>
+</body>
+</html>
